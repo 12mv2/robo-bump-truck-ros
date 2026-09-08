@@ -1,0 +1,6 @@
+# vcstool: `vcs import src < workspace.repos` from an empty colcon workspace, then add your model's repo below.
+repositories:
+  robo-bump-truck-ros:
+    type: git
+    url: https://github.com/12mv2/robo-bump-truck-ros.git
+    version: main
