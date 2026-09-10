@@ -28,6 +28,12 @@ the trail. So the model always publishes, and says so with the flag.
 
 ## What the bridge does with it
 
+![Pure pursuit in the corner: goal point Ld ahead on the tape, alpha between heading and goal, kappa = 2 sin(alpha) / Ld](docs/pure-pursuit-corner.png)
+
+*The truck's own controller is pure pursuit: pick the goal point a lookahead distance ahead on the trail and command the curvature of the circle
+through it. A model that publishes curvature is speaking the same language.*
+
+
 `truck_bridge/` turns the request into what ArduPilot Rover accepts today: an RC override on the steering channel while the
 vehicle is in MANUAL. Steering angle `δ = atan(L·κ)` with wheelbase `L = 0.269 m`, mapped to the servo's calibrated PWM.
 On the truck **positive PWM = left** and the truck's own tools use **positive κ = right**, so the bridge negates once, here,
