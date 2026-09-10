@@ -50,11 +50,14 @@ A configured failsafe is not a demonstrated failsafe. Every one of these has bee
 ## Layout
 
 ```
-desired_control_msgs/   the message package (colcon; imported verbatim by model and bridge)
-truck_bridge/           the bridge node: /desired_control → ArduPilot (MAVLink RC override today; MAVROS later)
-workspace.repos         a vcstool list to assemble a workspace with your model alongside these two
-docs/                   calibration (camera → vehicle frame), the seam sign convention, field notes
+desired_control_msgs/   the message package (colcon; supplied by the model side, committed verbatim)
+truck_bridge/           the bridge node: /desired_control → the truck's existing kappa→servo path (MAVLink RC override today; MAVROS later)
+examples/               the model side's publish/listen examples, verbatim
+docs/                   calibration (camera → vehicle frame), the seam sign convention, the seam diagram, field notes
 ```
+
+**One repo.** The model never lives here: it runs on the truck's Orin as a Docker image (arm64; Jazzy inside a 24.04 container on
+the Humble host) and only its message and examples are committed. There is nothing for vcstool to assemble.
 
 ## Distros
 
