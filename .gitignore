@@ -4,3 +4,4 @@ build/
 install/
 log/
 .DS_Store
+.staging-model-side/

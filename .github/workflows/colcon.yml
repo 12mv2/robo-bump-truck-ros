@@ -1,0 +1,74 @@
+name: colcon
+
+# Build every ROS 2 package in this repo on the two distros the truck actually uses:
+# Jazzy (the model runs in a 24.04 container on the Orin) and Humble (JetPack 6 = Ubuntu 22.04, the host).
+# The message package must build on BOTH, because both sides import it rather than retyping it.
+#
+# Until the message package lands, `colcon build` finds no packages and the job passes vacuously -- that is
+# deliberate and honest: the workflow is here so the FIRST commit of real code is checked, not so a green tick
+# can be claimed today.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [jazzy, humble]
+    container:
+      image: ros:${{ matrix.distro }}-ros-base
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: List the packages colcon can see
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          colcon list || true
+          n=$(colcon list 2>/dev/null | wc -l)
+          echo "packages found: $n"
+          echo "PKG_COUNT=$n" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ "${PKG_COUNT}" = "0" ]; then echo "no packages yet -- nothing to resolve"; exit 0; fi
+          apt-get update
+          rosdep update --rosdistro ${{ matrix.distro }}
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          rosdep install --from-paths . --ignore-src -y --rosdistro ${{ matrix.distro }}
+
+      - name: colcon build
+        shell: bash
+        run: |
+          if [ "${PKG_COUNT}" = "0" ]; then echo "no packages yet -- nothing to build"; exit 0; fi
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+      - name: colcon test
+        shell: bash
+        run: |
+          if [ "${PKG_COUNT}" = "0" ]; then echo "no packages yet -- nothing to test"; exit 0; fi
+          source /opt/ros/${{ matrix.distro }}/setup.bash
+          colcon test --event-handlers console_direct+
+          colcon test-result --verbose
+
+      - name: The message must match the documented contract
+        shell: bash
+        run: |
+          MSG=control_interfaces/msg/ControlMsg.msg
+          if [ ! -f "$MSG" ]; then echo "message package not committed yet -- skipping the contract check"; exit 0; fi
+          fail=0
+          for f in "float32 desired_curvature" "float32 desired_speed" "bool listen_to_steering" "bool listen_to_speed"; do
+            grep -qF "$f" "$MSG" || { echo "MISSING from $MSG: $f"; fail=1; }
+          done
+          grep -qiE "^\s*std_msgs/Header" "$MSG" && { echo "UNEXPECTED header in $MSG -- README says there is none"; fail=1; }
+          grep -qF "control_cmd" README.md || { echo "README no longer names the topic control_cmd"; fail=1; }
+          grep -qF "positive = LEFT" README.md || { echo "README no longer states the sign convention"; fail=1; }
+          exit $fail

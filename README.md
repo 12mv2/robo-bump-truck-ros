@@ -10,21 +10,40 @@ trail from the phone's camera. Everything here is the seam between a perception 
 
 ## The contract
 
-A model publishes one topic, `/desired_control`, at ~10 Hz:
+A model publishes one topic, **`control_cmd`**, at ~10 Hz. The message is **`control_interfaces/msg/ControlMsg`**:
+
+```
+# 1/m
+float32 desired_curvature
+
+# m/s
+float32 desired_speed
+
+bool listen_to_steering
+bool listen_to_speed
+```
 
 | field | meaning | convention |
 |---|---|---|
-| `curvature` | requested path curvature, 1/m | **positive = LEFT** (ROS right-handed, `base_footprint` frame: X forward, Y left, Z up, on the ground under the rear axle) |
-| `speed` | requested forward speed, m/s | the truck may cap it; today the human keeps the throttle |
-| `listen_to_steering` | the request is valid | **`false` = "I do not see a lane"**: speed 0, steering holds its last valid angle, the human can take over |
-| `listen_to_speed` | the speed field is valid | |
-| `header` | stamp + frame | |
+| `desired_curvature` | requested path curvature, 1/m | **positive = LEFT.** The model computes it as `κ = 2·Y/L²` in the standard ROS vehicle frame (X forward, **Y left**, Z up, on the ground under the rear axle), so a goal point to the left is positive |
+| `desired_speed` | requested forward speed, m/s | the truck may cap it; today the human keeps the throttle |
+| `listen_to_steering` | the curvature is valid this cycle | **`false` = "I do not see a lane"** |
+| `listen_to_speed` | the speed field is valid this cycle | |
 
-The exact `.msg` lives in `desired_control_msgs/` and is imported verbatim by both sides — never retyped.
+**There is no `header`.** The message carries no stamp and no frame id: it is a command for *now*, published every cycle, and
+a subscriber that has not heard for one period should treat that as a dropout rather than reasoning about staleness from a stamp.
 
 **No-lane behaviour is a safety contract, not a detail.** Publishing nothing means the bridge holds the last command and the
 truck keeps turning into whatever made the model lose the lane; publishing zero curvature means it straightens and drives off
-the trail. So the model always publishes, and says so with the flag.
+the trail. So the model always publishes, and says so with the flag. Agreed behaviour on both sides, and what the model side's
+node actually does once the lane has been missing for several consecutive frames:
+
+| | `desired_curvature` | `desired_speed` | `listen_to_steering` | `listen_to_speed` |
+|---|---|---|---|---|
+| lane seen | the computed curvature | the configured speed | `true` | `true` |
+| **no lane** | **the last valid curvature, held for reference** | **0** | **`false`** | `true` |
+
+So the bridge stops the vehicle and hands steering back to the human; it does not act on the held curvature.
 
 ## What the bridge does with it
 
@@ -50,8 +69,8 @@ A configured failsafe is not a demonstrated failsafe. Every one of these has bee
 ## Layout
 
 ```
-desired_control_msgs/   the message package (colcon; supplied by the model side, committed verbatim)
-truck_bridge/           the bridge node: /desired_control → the truck's existing kappa→servo path (MAVLink RC override today; MAVROS later)
+control_interfaces/     the message package (colcon; authored by the model side, committed verbatim — never retyped)
+truck_bridge/           the bridge node: control_cmd → the truck's existing kappa→servo path (MAVLink RC override today; MAVROS later)
 examples/               the model side's publish/listen examples, verbatim
 docs/                   calibration (camera → vehicle frame), the seam sign convention, the seam diagram, field notes
 ```
@@ -66,8 +85,9 @@ The message package builds on both.
 
 ## Status
 
-Interface repo, freshly cut (2026-09-08). The message definition is being supplied by the model side; the bridge node follows.
-Nothing here is claimed until it has driven the truck: **not tested, therefore not claimed.**
+Interface repo, cut 2026-09-08. **The contract above is transcribed from the model side's own `ControlMsg.msg` and runtime node
+(read 2026-09-13); the message package itself is not committed here yet.** The bridge node follows. Nothing here is claimed until
+it has driven the truck: **not tested, therefore not claimed.**
 
 ---
 Colin Rooney · [ROONEY Tech](https://rooneytech.com) · © 2026 Rooney Industries LLC · MIT.
