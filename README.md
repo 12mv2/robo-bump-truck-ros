@@ -1,8 +1,9 @@
 # robo-bump-truck-ros
 
 **A ROS 2 control interface for the [Robo Bump Truck](https://vaguebutexciting.dev/posts/kitchen-robot-eyes-log1/).**
-A perception model publishes a curvature and speed request using the message in this repository. The planned truck bridge
-will pass that request into the truck's existing controller. The model stays in its own repository.
+A perception model publishes a curvature and speed request using the message in this repository. The shadow bridge
+validates those requests and reports what it would request from the truck controller, with physical output disabled.
+The model stays in its own repository.
 
 The truck is an RC Traxxas Stampede 2WD with a Jetson Orin Nano, a Pixhawk 6C Mini running ArduPilot Rover, and an iPhone
 running [Robot Eyes](https://github.com/12mv2/robot-eyes) as its camera. The existing non-ROS controller has driven on trails.
@@ -17,7 +18,12 @@ See [source provenance](docs/source-provenance.md) for the exact supplied files 
 All three packages built and the publisher/listener delivery test passed locally on **ROS 2 Humble and Jazzy** in arm64
 Linux containers on September 15, 2026. See [validation details](docs/validation-2026-09-15.md). CI repeats those checks;
 check Actions for the hosted result for the commit you use. This delivery has not been validated on the truck.
-`truck_bridge/` is an implementation specification, not an executable package yet.
+`truck_bridge/` now provides an executable **outputs-disabled** ROS subscriber, pure command policy and tests.
+It has no MAVLink/serial connection or vehicle-output option. It reports receipt age and leaves
+`source_age_verified=false`: the shared command message cannot establish when its source image was captured.
+See [bridge usage and limits](truck_bridge/README.md). Physical output integration remains pending.
+The added bridge passed 27 package tests on each of Humble and Jazzy; a separate private-controller test delivered
+real DDS messages through the existing output owner with all sends prohibited. See [bridge validation](docs/bridge-validation-2026-09-15.md).
 
 ## The contract
 
@@ -58,8 +64,10 @@ runtime; 10 Hz is not established merely by connecting to the topic.
 For the no-lane message the required bridge response is a stop request and steering handback to the human. The retained
 curvature must not continue steering the vehicle. Invalid curvature can also occur independently of lane loss, including
 with a nonzero speed request; the bridge must evaluate both validity flags rather than treating the table as exhaustive.
-Silence, non-finite values and timeout are separate fault cases with explicit tests. These bridge behaviors are requirements
-until implemented and demonstrated.
+Silence, non-finite active values and timeout are separate fault cases with explicit tests. The shadow bridge implements
+these request policies; its diagnostics do not establish a physical stop or vehicle handback. Invalid fields whose validity
+flag is false are ignored. A positive speed with invalid steering is refused. Missing speed authority withdraws autonomous
+throttle while retaining independently valid steering in the decision.
 
 ## Build and test
 
@@ -69,11 +77,11 @@ Use an Ubuntu ROS 2 Humble or Jazzy environment with `rosdep` and `colcon` insta
 source /opt/ros/humble/setup.bash
 # For Jazzy, source /opt/ros/jazzy/setup.bash instead.
 rosdep update
-rosdep install --from-paths control_interfaces examples --ignore-src -y --rosdistro "$ROS_DISTRO"
+rosdep install --from-paths control_interfaces examples truck_bridge --ignore-src -y --rosdistro "$ROS_DISTRO"
 python3 tools/check_interface.py
-colcon build --base-paths control_interfaces examples --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --base-paths control_interfaces examples truck_bridge --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
-ROS_LOCALHOST_ONLY=1 colcon test --base-paths control_interfaces examples --return-code-on-test-failure --event-handlers console_direct+
+ROS_LOCALHOST_ONLY=1 colcon test --base-paths control_interfaces examples truck_bridge --return-code-on-test-failure --event-handlers console_direct+
 colcon test-result --verbose
 ```
 
@@ -137,7 +145,7 @@ projection assumes locally flat terrain; it is not a measurement of arbitrary 3D
 control_interfaces/               supplied message package, verbatim
 examples/control_node_pkg/        supplied publisher plus runnable scaffolding and integration test
 examples/control_listener_pkg/    supplied listener plus runnable scaffolding
-truck_bridge/                     planned bridge behavior and validation requirements
+truck_bridge/                     outputs-disabled command subscriber, policy and tests
 tools/check_interface.py          source-integrity and contract checks, no ROS required
 docs/                            provenance, publication scope and sign convention
 ```
@@ -145,7 +153,7 @@ docs/                            provenance, publication scope and sign conventi
 The reported Orin host is Ubuntu 22.04 with ROS 2 Humble. Humble and Jazzy are build targets in CI; the model container's
 ROS distribution, arm64 support and JetPack compatibility must be confirmed against the delivered runtime.
 The perception runtime and model weights are not part of this repository. There is no additional repository manifest
-or `vcstool` setup required to build these three interface/example packages.
+or `vcstool` setup required to build the interface, examples and shadow bridge.
 
 ---
 Colin Rooney · [ROONEY Tech](https://rooneytech.com) · © 2026 Rooney Industries LLC · MIT.

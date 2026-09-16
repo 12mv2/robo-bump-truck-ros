@@ -76,10 +76,15 @@ def main():
             errors.append("Required ROS package is missing: " + package)
         elif ET.parse(package_xml).getroot().findtext("name") != package:
             errors.append("Unexpected ROS package name in: " + str(package_xml))
+    bridge = root / "truck_bridge"
+    if not all((bridge / name).is_file() for name in ("package.xml", "setup.py", "setup.cfg", "truck_bridge/node.py", "truck_bridge/policy.py")):
+        errors.append("Required shadow bridge package is missing")
+    elif ET.parse(bridge / "package.xml").getroot().findtext("name") != "truck_bridge":
+        errors.append("Unexpected shadow bridge package name")
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("Interface contract, three packages and five verbatim supplied files verified.")
+    print("Interface contract, four packages and five verbatim supplied files verified.")
     return 0
 
 
