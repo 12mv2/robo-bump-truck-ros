@@ -5,7 +5,6 @@
   <description>Outputs-disabled ROSie command policy and diagnostics.</description>
   <maintainer email="12mv2@users.noreply.github.com">Rooney Industries LLC</maintainer>
   <license>MIT</license>
-  <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>control_interfaces</exec_depend>
