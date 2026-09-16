@@ -1,0 +1,31 @@
+{
+  "received": "2026-09-10",
+  "staged": "2026-09-13",
+  "files": [
+    {
+      "source": "control_interfaces/msg/ControlMsg.msg",
+      "path": "control_interfaces/msg/ControlMsg.msg",
+      "sha256": "a01a1dbe9f813285073b48371078303b177826287ae9ff345c9a9de39e3a6751"
+    },
+    {
+      "source": "control_interfaces/CMakeLists.txt",
+      "path": "control_interfaces/CMakeLists.txt",
+      "sha256": "40a43f1a9c2c9a33ff8d739e43c3311bc53bb2b636398f0ec1c2de43ba6f4d5c"
+    },
+    {
+      "source": "control_interfaces/package.xml",
+      "path": "control_interfaces/package.xml",
+      "sha256": "6130b81ff031e535585df5f0783ff142c8828f086ded687f17cd4db1265e9bc9"
+    },
+    {
+      "source": "control_node_pkg/src/control_publisher_node.cpp",
+      "path": "examples/control_node_pkg/src/control_publisher_node.cpp",
+      "sha256": "3071863ac013da6d6dfca8eab2ca20e9f0dae85713778212871db51b532f0c12"
+    },
+    {
+      "source": "control_listener_pkg/src/control_listener_node.cpp",
+      "path": "examples/control_listener_pkg/src/control_listener_node.cpp",
+      "sha256": "5bb803ab88d68c2bf6c89e9431d8d1fa31cc7f2bf522386e732a93da2811f5a7"
+    }
+  ]
+}

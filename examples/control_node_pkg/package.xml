@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>control_node_pkg</name>
+  <version>0.1.0</version>
+  <description>Runnable wrapper for the supplied ControlMsg publisher example.</description>
+  <maintainer email="12mv2@users.noreply.github.com">Rooney Industries LLC</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>control_interfaces</depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>control_listener_pkg</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

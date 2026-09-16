@@ -1,93 +1,151 @@
 # robo-bump-truck-ros
 
-**Drive the [Robo Bump Truck](https://vaguebutexciting.dev/posts/kitchen-robot-eyes-log1/) from any lane- or trail-following model.**
-This repo is the ROS 2 interface to the truck: the message a model publishes, and the bridge node that turns it into a
-steering and throttle request for the truck's flight controller. Your model stays in your repo; you depend on this one.
+**A ROS 2 control interface for the [Robo Bump Truck](https://vaguebutexciting.dev/posts/kitchen-robot-eyes-log1/).**
+A perception model publishes a curvature and speed request using the message in this repository. The planned truck bridge
+will pass that request into the truck's existing controller. The model stays in its own repository.
 
 The truck is an RC Traxxas Stampede 2WD with a Jetson Orin Nano, a Pixhawk 6C Mini running ArduPilot Rover, and an iPhone
-as the camera ([Robot Eyes](https://github.com/12mv2/robot-eyes) records and streams it). It has steered itself on a real
-trail from the phone's camera. Everything here is the seam between a perception model and that vehicle.
+running [Robot Eyes](https://github.com/12mv2/robot-eyes) as its camera. The existing non-ROS controller has driven on trails.
+That does not establish that this ROS interface has driven the truck.
+
+## Status
+
+The supplied message package and publisher/listener source files are included unchanged. Repository-authored headers,
+executable entry points, a 10 Hz publisher timer, build files and an integration test make the examples runnable.
+See [source provenance](docs/source-provenance.md) for the exact supplied files and their SHA-256 checksums.
+
+All three packages built and the publisher/listener delivery test passed locally on **ROS 2 Humble and Jazzy** in arm64
+Linux containers on September 15, 2026. See [validation details](docs/validation-2026-09-15.md). CI repeats those checks;
+check Actions for the hosted result for the commit you use. This delivery has not been validated on the truck.
+`truck_bridge/` is an implementation specification, not an executable package yet.
 
 ## The contract
 
-A model publishes one topic, **`control_cmd`**, at ~10 Hz. The message is **`control_interfaces/msg/ControlMsg`**:
+The relative topic is **`control_cmd`** (normally `/control_cmd` without a namespace). The message is
+**`control_interfaces/msg/ControlMsg`**, with these four fields in this order:
 
-```
-# 1/m
+```text
 float32 desired_curvature
-
-# m/s
 float32 desired_speed
-
 bool listen_to_steering
 bool listen_to_speed
 ```
 
-| field | meaning | convention |
+| Field | Meaning | Convention |
 |---|---|---|
-| `desired_curvature` | requested path curvature, 1/m | **positive = LEFT.** The model computes it as `κ = 2·Y/L²` in the standard ROS vehicle frame (X forward, **Y left**, Z up, on the ground under the rear axle), so a goal point to the left is positive |
-| `desired_speed` | requested forward speed, m/s | the truck may cap it; today the human keeps the throttle |
-| `listen_to_steering` | the curvature is valid this cycle | **`false` = "I do not see a lane"** |
-| `listen_to_speed` | the speed field is valid this cycle | |
+| `desired_curvature` | Requested path curvature, 1/m | **positive = LEFT** in a vehicle frame with X forward, Y left, Z up |
+| `desired_speed` | Requested forward speed, m/s | Subject to the truck's speed limits and human controls |
+| `listen_to_steering` | Whether the curvature is valid | When false, do not apply the retained curvature |
+| `listen_to_speed` | Whether the speed request is valid | Evaluated independently from steering validity |
 
-**There is no `header`.** The message carries no stamp and no frame id: it is a command for *now*, published every cycle, and
-a subscriber that has not heard for one period should treat that as a dropout rather than reasoning about staleness from a stamp.
+The model-side pure-pursuit expression is `κ = 2·Y/L²`, with the vehicle-frame origin on the ground under the rear axle.
+See the [sign convention](docs/seam-sign-convention.md).
 
-**No-lane behaviour is a safety contract, not a detail.** Publishing nothing means the bridge holds the last command and the
-truck keeps turning into whatever made the model lose the lane; publishing zero curvature means it straightens and drives off
-the trail. So the model always publishes, and says so with the flag. Agreed behaviour on both sides, and what the model side's
-node actually does once the lane has been missing for several consecutive frames:
+**There is no header, timestamp or frame ID.** A bridge must track receipt time and reject timed-out commands. Receipt time
+alone cannot detect an old image waiting in an upstream queue. Source-image age and producer health need a separate,
+compatible mechanism; this delivery does not silently add fields to the shared message.
 
-| | `desired_curvature` | `desired_speed` | `listen_to_steering` | `listen_to_speed` |
+The example publishes at 10 Hz. A model's actual cadence, deadline and queue limits must be agreed and measured for its
+runtime; 10 Hz is not established merely by connecting to the topic.
+
+### Validity and no-lane behavior
+
+| Situation | `desired_curvature` | `desired_speed` | `listen_to_steering` | `listen_to_speed` |
 |---|---|---|---|---|
-| lane seen | the computed curvature | the configured speed | `true` | `true` |
-| **no lane** | **the last valid curvature, held for reference** | **0** | **`false`** | `true` |
+| Valid lane and curvature | Computed curvature | Configured speed | `true` | `true` |
+| No lane, after the producer's grace period | Last valid curvature, retained for reference | `0` | `false` | `true` |
 
-So the bridge stops the vehicle and hands steering back to the human; it does not act on the held curvature.
+For the no-lane message the required bridge response is a stop request and steering handback to the human. The retained
+curvature must not continue steering the vehicle. Invalid curvature can also occur independently of lane loss, including
+with a nonzero speed request; the bridge must evaluate both validity flags rather than treating the table as exhaustive.
+Silence, non-finite values and timeout are separate fault cases with explicit tests. These bridge behaviors are requirements
+until implemented and demonstrated.
 
-## What the bridge does with it
+## Build and test
 
-![Pure pursuit in the corner: goal point Ld ahead on the tape, alpha between heading and goal, kappa = 2 sin(alpha) / Ld](docs/pure-pursuit-corner.png)
+Use an Ubuntu ROS 2 Humble or Jazzy environment with `rosdep` and `colcon` installed. From the repository root:
 
-*The truck's own controller is pure pursuit: pick the goal point a lookahead distance ahead on the trail and command the curvature of the circle
-through it. A model that publishes curvature is speaking the same language.*
+```bash
+source /opt/ros/humble/setup.bash
+# For Jazzy, source /opt/ros/jazzy/setup.bash instead.
+rosdep update
+rosdep install --from-paths control_interfaces examples --ignore-src -y --rosdistro "$ROS_DISTRO"
+python3 tools/check_interface.py
+colcon build --base-paths control_interfaces examples --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+ROS_LOCALHOST_ONLY=1 colcon test --base-paths control_interfaces examples --return-code-on-test-failure --event-handlers console_direct+
+colcon test-result --verbose
+```
 
+`tools/check_interface.py` verifies the supplied file hashes, exact field order and required packages without ROS. The ROS
+integration test starts both C++ examples on a unique namespace, checks repeated message delivery and all four values,
+and confirms that the C++ listener reports receiving them. Neither test actuates a vehicle.
 
-`truck_bridge/` turns the request into what ArduPilot Rover accepts today: an RC override on the steering channel while the
-vehicle is in MANUAL. Steering angle `δ = atan(L·κ)` with wheelbase `L = 0.269 m`, mapped to the servo's calibrated PWM.
-On the truck **positive PWM = left** and the truck's own tools use **positive κ = right**, so the bridge negates once, here,
-and the wire convention above wins.
+### Run the examples
 
-Safety model, all enforced by the flight controller and the radio, none by this node:
-- the radio's 3-position switch: **out = model steers · middle = blend with the human's wheel · toward the driver = HOLD**;
-- a kill knob that stops the motor regardless of anything on the Orin;
-- `RC_OVERRIDE_TIME 3 s`: if the bridge stops publishing, steering returns to the radio within three seconds;
-- throttle stays on the human's trigger until the truck earns otherwise.
+The supplied publisher emits a fixed curvature of **0.1 1/m** and speed of **2.5 m/s**, with both validity flags true.
+Use the demo namespace below so those sample requests do not enter the truck's `/control_cmd` topic.
 
-A configured failsafe is not a demonstrated failsafe. Every one of these has been induced on the bench and watched.
+In each terminal, source the ROS installation and this workspace's `install/setup.bash` first.
+
+```bash
+# Terminal 1
+ros2 run control_listener_pkg control_listener_node --ros-args -r __ns:=/interface_demo
+```
+
+```bash
+# Terminal 2
+ros2 run control_node_pkg control_publisher_node --ros-args -r __ns:=/interface_demo
+```
+
+The listener should repeatedly log:
+
+```text
+Received: curvature=0.10 speed=2.50 listen_steering=1 listen_speed=1
+```
+
+Stop the examples with Ctrl-C. They are interface demonstrations; they do not implement perception, lane-loss detection,
+vehicle arbitration or speed control.
+
+## Bridge architecture
+
+```text
+Perception model → control_cmd → ROS bridge → existing truck controller → existing output owner → Pixhawk
+```
+
+The bridge is an input adapter. It must not open a second MAVLink/serial writer or bypass the existing output owner.
+Convert wire curvature to the truck's convention exactly once: `κ_truck = −κ_wire`.
+The current truck controller uses an empirical curvature-to-normalized-steering calibration before PWM output;
+`atan(wheelbase × curvature)` is not its current actuator mapping. Speed requests in m/s need deliberate integration with
+the existing bounded speed controller and human controls.
+
+Manual override, command expiry, no-lane stopping and steering handback must be tested through the integrated path.
+Existing radio/flight-controller settings and previous non-ROS tests do not prove the new bridge's behavior.
+See [bridge requirements](truck_bridge/README.md).
+
+## Camera and calibration
+
+The control interface does not publish camera images. A separate Robot Eyes camera adapter is needed to publish the
+actual image stream as `sensor_msgs/msg/Image`, with consistent camera calibration information. Intrinsic calibration
+uses a measured checkerboard; extrinsic calibration establishes the camera pose relative to the truck and ground.
+Calibrate the image configuration used for inference and agree where distortion correction happens. A ground-plane
+projection assumes locally flat terrain; it is not a measurement of arbitrary 3D terrain.
 
 ## Layout
 
+```text
+control_interfaces/               supplied message package, verbatim
+examples/control_node_pkg/        supplied publisher plus runnable scaffolding and integration test
+examples/control_listener_pkg/    supplied listener plus runnable scaffolding
+truck_bridge/                     planned bridge behavior and validation requirements
+tools/check_interface.py          source-integrity and contract checks, no ROS required
+docs/                            provenance, publication scope and sign convention
 ```
-control_interfaces/     the message package (colcon; authored by the model side, committed verbatim — never retyped)
-truck_bridge/           the bridge node: control_cmd → the truck's existing kappa→servo path (MAVLink RC override today; MAVROS later)
-examples/               the model side's publish/listen examples, verbatim
-docs/                   calibration (camera → vehicle frame), the seam sign convention, the seam diagram, field notes
-```
 
-**One repo.** The model never lives here: it runs on the truck's Orin as a Docker image (arm64; Jazzy inside a 24.04 container on
-the Humble host) and only its message and examples are committed. There is nothing for vcstool to assemble.
-
-## Distros
-
-The truck's Orin is JetPack 6 = Ubuntu 22.04 = **ROS 2 Humble** natively. A Jazzy model runs in a 24.04 container on it.
-The message package builds on both.
-
-## Status
-
-Interface repo, cut 2026-09-08. **The contract above is transcribed from the model side's own `ControlMsg.msg` and runtime node
-(read 2026-09-13); the message package itself is not committed here yet.** The bridge node follows. Nothing here is claimed until
-it has driven the truck: **not tested, therefore not claimed.**
+The reported Orin host is Ubuntu 22.04 with ROS 2 Humble. Humble and Jazzy are build targets in CI; the model container's
+ROS distribution, arm64 support and JetPack compatibility must be confirmed against the delivered runtime.
+The perception runtime and model weights are not part of this repository. There is no additional repository manifest
+or `vcstool` setup required to build these three interface/example packages.
 
 ---
 Colin Rooney · [ROONEY Tech](https://rooneytech.com) · © 2026 Rooney Industries LLC · MIT.
