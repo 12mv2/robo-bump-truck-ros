@@ -32,15 +32,15 @@ jobs:
           apt-get install -y --no-install-recommends python3-colcon-common-extensions python3-rosdep
           rosdep update --rosdistro ${{ matrix.distro }}
           source /opt/ros/${{ matrix.distro }}/setup.bash
-          rosdep install --from-paths control_interfaces examples --ignore-src -y --rosdistro ${{ matrix.distro }}
+          rosdep install --from-paths control_interfaces examples truck_bridge --ignore-src -y --rosdistro ${{ matrix.distro }}
 
-      - name: Require the three delivered ROS packages
+      - name: Require interface, examples and shadow bridge
         shell: bash
         run: |
           set -eo pipefail
           source /opt/ros/${{ matrix.distro }}/setup.bash
-          colcon list --base-paths control_interfaces examples --names-only | sort > /tmp/packages.txt
-          printf '%s\n' control_interfaces control_listener_pkg control_node_pkg | sort > /tmp/expected-packages.txt
+          colcon list --base-paths control_interfaces examples truck_bridge --names-only | sort > /tmp/packages.txt
+          printf '%s\n' control_interfaces control_listener_pkg control_node_pkg truck_bridge | sort > /tmp/expected-packages.txt
           diff -u /tmp/expected-packages.txt /tmp/packages.txt
 
       - name: Build
@@ -48,9 +48,9 @@ jobs:
         run: |
           set -eo pipefail
           source /opt/ros/${{ matrix.distro }}/setup.bash
-          colcon build --base-paths control_interfaces examples --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release
+          colcon build --base-paths control_interfaces examples truck_bridge --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release
 
-      - name: Test C++ example delivery
+      - name: Test examples and ROS command policy
         shell: bash
         env:
           ROS_LOCALHOST_ONLY: "1"
@@ -58,8 +58,15 @@ jobs:
           set -eo pipefail
           source /opt/ros/${{ matrix.distro }}/setup.bash
           source install/setup.bash
-          colcon test --base-paths control_interfaces examples --return-code-on-test-failure --event-handlers console_direct+
+          colcon test --base-paths control_interfaces examples truck_bridge --return-code-on-test-failure --event-handlers console_direct+
           colcon test-result --verbose
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('build/truck_bridge/pytest.xml').getroot()
+          suites = [root] if root.tag == 'testsuite' else root.findall('testsuite')
+          assert sum(int(s.get('tests', 0)) for s in suites) > 0, 'No bridge tests ran'
+          assert sum(int(s.get('skipped', 0)) for s in suites) == 0, 'Bridge tests were skipped'
+          PY
 
       - name: Retain test logs
         if: always()
