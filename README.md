@@ -147,12 +147,19 @@ examples/control_node_pkg/        supplied publisher plus runnable scaffolding a
 examples/control_listener_pkg/    supplied listener plus runnable scaffolding
 truck_bridge/                     outputs-disabled command subscriber, policy and tests
 tools/check_interface.py          source-integrity and contract checks, no ROS required
-docs/                            provenance, publication scope and sign convention
+tools/jetson_setup.sh             one-command Jetson/Ubuntu setup with a pass/fail check table
+tools/replay_images.py            publish a folder of frames as sensor_msgs/Image
+tools/watch_control_cmd.py        print control_cmd messages with their arrival rate
+docs/                            provenance, publication scope, sign convention, Jetson setup
+AGENT-BRIEF.md                    the setup procedure written for a coding agent
 ```
 
-The reported Orin host is Ubuntu 22.04 with ROS 2 Humble. Humble and Jazzy are build targets in CI; the model container's
-ROS distribution, arm64 support and JetPack compatibility must be confirmed against the delivered runtime.
-The perception runtime and model weights are not part of this repository. There is no additional repository manifest
+The truck's Orin is JetPack 6.2.1 (Ubuntu 22.04) with ROS 2 Humble. Humble and Jazzy are build targets in CI. No
+container is needed: a perception node that links libtorch, OpenCV, cv_bridge and yaml-cpp builds natively on the Orin.
+[docs/jetson-orin-setup.md](docs/jetson-orin-setup.md) has the one-command setup (`tools/jetson_setup.sh`), the exact
+versions it was verified on, and a replay test (`tools/replay_images.py` + `tools/watch_control_cmd.py`) that proves a
+node publishes `/control_cmd` from recorded frames with no truck attached. [AGENT-BRIEF.md](AGENT-BRIEF.md) is the same
+procedure written for a coding agent. The perception runtime and model weights are not part of this repository. There is no additional repository manifest
 or `vcstool` setup required to build the interface, examples and shadow bridge.
 
 ---
