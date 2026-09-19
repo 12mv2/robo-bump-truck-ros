@@ -103,7 +103,7 @@ say "Checks"
 if [[ -d /opt/ros/$ROS_DISTRO_WANT ]]; then ok "ROS 2 $ROS_DISTRO_WANT at /opt/ros/$ROS_DISTRO_WANT"; else fail "ROS 2 $ROS_DISTRO_WANT not installed"; fi
 # shellcheck disable=SC1090
 set +u; source "/opt/ros/$ROS_DISTRO_WANT/setup.bash" 2>/dev/null || true; set -u   # ROS setup files use unbound vars
-command -v colcon >/dev/null && ok "colcon $(colcon version-check 2>/dev/null | head -1 | awk '{print $2}')" || fail "colcon missing"
+command -v colcon >/dev/null && ok "colcon (colcon-core $(python3 -c 'import colcon_core;print(colcon_core.__version__)' 2>/dev/null || echo '?'))" || fail "colcon missing"
 for p in cv_bridge image_transport camera_calibration sensor_msgs rclcpp; do
   ros2 pkg prefix "$p" >/dev/null 2>&1 && ok "ros package $p" || fail "ros package $p missing"
 done

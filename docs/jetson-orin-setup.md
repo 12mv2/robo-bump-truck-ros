@@ -16,7 +16,7 @@ This exact procedure was run end to end on this hardware. Versions below are wha
 | Board | NVIDIA Jetson Orin Nano Developer Kit (Super), 8 GB | 2026-09-18 |
 | JetPack / L4T | 6.2.1 / R36.4.7 | |
 | Ubuntu | 22.04.5 LTS | |
-| ROS 2 | Humble, rclcpp 16.0.19, cv_bridge 3.2.1, colcon 0.3.0 | |
+| ROS 2 | Humble, rclcpp 16.0.19, cv_bridge 3.2.1, colcon-core 0.21.3 (common-extensions 0.3.0) | |
 | PyTorch / libtorch | 2.8.0, CUDA 12.6, cuDNN 9.3 (NVIDIA Jetson wheel) | |
 | OpenCV | libopencv-dev 4.8.0 | |
 | yaml-cpp | 0.7.0 | |
@@ -25,7 +25,10 @@ This exact procedure was run end to end on this hardware. Versions below are wha
 If your versions differ, the script still runs; the table is what "known good" means.
 
 Measured on that machine the same day, with a perception node (rclcpp + libtorch CPU + cv_bridge, TorchScript model,
-160×120 input) built by steps 2–3 and fed by step 4:
+160×120 input) built by steps 2–3 and fed by step 4. **The model was a zero-parameter stand-in with the same output
+shape**, so these numbers prove the pipeline and the publisher limits, not a trained model's throughput. Steering was
+not accepted in this test (`listen_to_steering=false` throughout: no flat-world calibration file was configured, so
+curvature was NaN by design). An independent rerun the same evening reproduced them: 4.66 Hz in, 4.59 Hz out, one process.
 
 | Replay resolution | `/image_raw` rate | `/control_cmd` rate | Note |
 |---|---|---|---|

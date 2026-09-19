@@ -26,7 +26,8 @@ def main():
     ap.add_argument("--frame-id", default="camera")
     a = ap.parse_args()
 
-    files = sorted(f for f in os.listdir(a.folder) if os.path.splitext(f)[1].lower() in EXTS)
+    files = sorted(f for f in os.listdir(a.folder)
+                   if os.path.splitext(f)[1].lower() in EXTS and not f.startswith("._"))  # skip macOS AppleDouble files
     if not files:
         sys.exit(f"no image files in {a.folder}")
     size = tuple(int(x) for x in a.resize.lower().split("x")) if a.resize else None
